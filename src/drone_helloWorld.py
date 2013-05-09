@@ -27,8 +27,8 @@ def helloWorld():
 	time.sleep(2)
 	controller.SendTakeoff()
 	start = time.time()
-	errorX = 1
-	errorY = 1
+	errorX = 0.5
+	errorY = 0.5
 	while(errorX >= 0.05):
 		roll = 0
 		pitch = errorX*0.5
