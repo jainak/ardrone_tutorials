@@ -12,6 +12,8 @@ import rospy
 # Load the DroneController class, which handles interactions with the drone, and the DroneVideoDisplay class, which handles video display
 from drone_controller import BasicDroneController
 from drone_video_display import DroneVideoDisplay
+from ardrone_autonomy.msg import Navdata # for receiving navdata feedback
+from geometry_msgs.msg import Pose #publish quadrotor state (velocity for every pose)
 
 # Finally the GUI libraries
 from PySide import QtCore, QtGui
@@ -37,10 +39,24 @@ class KeyboardController(DroneVideoDisplay):
 	def __init__(self):
 		super(KeyboardController,self).__init__()
 		
+		self.rotX = 0
+		self.rotY = 0
+		self.rotZ = 0
+		
 		self.pitch = 0
 		self.roll = 0
 		self.yaw_velocity = 0 
 		self.z_velocity = 0
+		self.vel_max = 0.25
+		self.subNavdata = rospy.Subscriber('/ardrone/navdata',Navdata,self.ReceiveNavdata) 
+		self.pub = rospy.Publisher('/motion_model_data',Pose)
+		
+	def ReceiveNavdata(self,navdata):
+	# Although there is a lot of data in this packet, we're only interested in the state at the moment	
+		self.status = navdata.state
+		self.rotX = navdata.rotX
+		self.rotY = navdata.rotY
+		self.rotZ = navdata.rotZ
 
 # We add a keyboard handler to the DroneVideoDisplay to react to keypresses
 	def keyPressEvent(self, event):
@@ -58,28 +74,40 @@ class KeyboardController(DroneVideoDisplay):
 			else:
 				# Now we handle moving, notice that this section is the opposite (+=) of the keyrelease section
 				if key == KeyMapping.YawLeft:
-					self.yaw_velocity += 1
+					self.yaw_velocity += self.vel_max
 				elif key == KeyMapping.YawRight:
-					self.yaw_velocity += -1
+					self.yaw_velocity += -self.vel_max
 
 				elif key == KeyMapping.PitchForward:
-					self.pitch += 1
+					self.pitch += self.vel_max
 				elif key == KeyMapping.PitchBackward:
-					self.pitch += -1
+					self.pitch += -self.vel_max
 
 				elif key == KeyMapping.RollLeft:
-					self.roll += 1
+					self.roll += self.vel_max
 				elif key == KeyMapping.RollRight:
-					self.roll += -1
+					self.roll += -self.vel_max
 
 				elif key == KeyMapping.IncreaseAltitude:
-					self.z_velocity += 1
+					self.z_velocity += self.vel_max
 				elif key == KeyMapping.DecreaseAltitude:
-					self.z_velocity += -1
+					self.z_velocity += -self.vel_max
 
 			# finally we set the command to be sent. The controller handles sending this at regular intervals
 			controller.SetCommand(self.roll, self.pitch, self.yaw_velocity, self.z_velocity)
-
+			
+			#Publish vx, vy, vz and actual angle - roll, pitch, yaw w.r.t world
+			x = Pose()
+			x.position.x = self.pitch
+			x.position.y = self.roll
+			x.position.z = self.z_velocity
+			
+			x.orientation.x = self.rotX
+			x.orientation.y = self.rotY
+			x.orientation.z = self.rotZ
+			x.orientation.w = 0.0
+			
+			self.pub.publish(x)
 
 	def keyReleaseEvent(self,event):
 		key = event.key()
@@ -89,24 +117,24 @@ class KeyboardController(DroneVideoDisplay):
 			# Note that we don't handle the release of emergency/takeoff/landing keys here, there is no need.
 			# Now we handle moving, notice that this section is the opposite (-=) of the keypress section
 			if key == KeyMapping.YawLeft:
-				self.yaw_velocity -= 1
+				self.yaw_velocity -= self.vel_max
 			elif key == KeyMapping.YawRight:
-				self.yaw_velocity -= -1
+				self.yaw_velocity -= -self.vel_max
 
 			elif key == KeyMapping.PitchForward:
-				self.pitch -= 1
+				self.pitch -= self.vel_max
 			elif key == KeyMapping.PitchBackward:
-				self.pitch -= -1
+				self.pitch -= -self.vel_max
 
 			elif key == KeyMapping.RollLeft:
-				self.roll -= 1
+				self.roll -= self.vel_max
 			elif key == KeyMapping.RollRight:
-				self.roll -= -1
+				self.roll -= -self.vel_max
 
 			elif key == KeyMapping.IncreaseAltitude:
-				self.z_velocity -= 1
+				self.z_velocity -= self.vel_max
 			elif key == KeyMapping.DecreaseAltitude:
-				self.z_velocity -= -1
+				self.z_velocity -= -self.vel_max
 
 			# finally we set the command to be sent. The controller handles sending this at regular intervals
 			controller.SetCommand(self.roll, self.pitch, self.yaw_velocity, self.z_velocity)
